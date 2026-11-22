@@ -1,0 +1,9 @@
+# Receptor PC
+pc-server/node_modules/
+
+# Token de emparejamiento: NO subir
+pc-server/config.json
+
+# Flutter (mobile/.gitignore ya cubre build/ y .dart_tool/)
+*.apk
+*.log
