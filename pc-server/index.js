@@ -44,10 +44,10 @@ const typer = spawn(
 );
 typer.on('exit', (c) => { console.error(`typer.ps1 termino (${c})`); process.exit(1); });
 
-function typeCode(code) {
+function typeCode(code, suffix = SUFFIX) {
   typer.stdin.write(`T ${Buffer.from(code, 'utf8').toString('base64')}\n`);
-  if (SUFFIX === 'enter') typer.stdin.write('K 13\n');
-  else if (SUFFIX === 'tab') typer.stdin.write('K 9\n');
+  if (suffix === 'enter') typer.stdin.write('K 13\n');
+  else if (suffix === 'tab') typer.stdin.write('K 9\n');
 }
 
 // --- Servidor WebSocket ---
@@ -73,7 +73,9 @@ wss.on('connection', (ws, req) => {
     if (code === last.code && now - last.at < DEDUP_MS) return; // lectura doble
     last = { code, at: now };
     console.log(`[>] ${code}`);
-    typeCode(code);
+    // El celular puede pedir que no se envie la tecla final (send: false).
+    // Si no lo indica (apps viejas), se usa --suffix.
+    typeCode(code, msg.send === false ? 'none' : SUFFIX);
     ws.send(JSON.stringify({ type: 'ok', code }));
   });
   ws.on('close', () => console.log('[-] Celular desconectado'));

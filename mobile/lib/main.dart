@@ -4,9 +4,12 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:vibration/vibration.dart';
 
 import 'connection_service.dart';
 import 'scanner_overlay.dart';
+import 'settings_screen.dart';
+import 'settings_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,17 +25,20 @@ class CodebarsApp extends StatefulWidget {
 
 class _CodebarsAppState extends State<CodebarsApp> {
   final service = ConnectionService();
+  final settings = SettingsService();
   bool loaded = false;
 
   @override
   void initState() {
     super.initState();
-    service.load().then((_) => setState(() => loaded = true));
+    Future.wait([service.load(), settings.load()])
+        .then((_) => setState(() => loaded = true));
   }
 
   @override
   void dispose() {
     service.dispose();
+    settings.dispose();
     super.dispose();
   }
 
@@ -48,7 +54,7 @@ class _CodebarsAppState extends State<CodebarsApp> {
               listenable: service,
               builder: (_, _) => service.state == LinkState.unpaired
                   ? PairScreen(service: service)
-                  : ScanScreen(service: service),
+                  : ScanScreen(service: service, settings: settings),
             ),
     );
   }
@@ -115,8 +121,9 @@ class _PairScreenState extends State<PairScreen> {
 
 /// Pantalla 2: escaneo continuo; cada codigo se envia a la PC.
 class ScanScreen extends StatefulWidget {
-  const ScanScreen({super.key, required this.service});
+  const ScanScreen({super.key, required this.service, required this.settings});
   final ConnectionService service;
+  final SettingsService settings;
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
@@ -151,6 +158,18 @@ class _ScanScreenState extends State<ScanScreen> {
 
   final player = AudioPlayer();
 
+  /// Vibra con el motor del telefono. HapticFeedback no sirve aqui: depende de
+  /// la opcion "respuesta haptica" del sistema y a menudo no vibra.
+  Future<void> _vibrate() async {
+    try {
+      if (await Vibration.hasVibrator() == true) {
+        await Vibration.vibrate(duration: 120);
+      } else {
+        await HapticFeedback.heavyImpact();
+      }
+    } catch (_) {}
+  }
+
   /// Reproduce el beep desde el inicio cada vez, aunque el anterior siga sonando.
   Future<void> _beep() async {
     try {
@@ -169,9 +188,9 @@ class _ScanScreenState extends State<ScanScreen> {
       if (code == lastCode && now.difference(lastAt) < _dedup) return;
       lastCode = code;
       lastAt = now;
-      svc.send(code);
-      HapticFeedback.mediumImpact();
-      _beep();
+      svc.send(code, sendKey: widget.settings.sendKey);
+      if (widget.settings.vibration) _vibrate();
+      if (widget.settings.sound) _beep();
       setState(() => hit = true);
       hitTimer?.cancel();
       hitTimer = Timer(const Duration(milliseconds: 700), () {
@@ -207,9 +226,16 @@ class _ScanScreenState extends State<ScanScreen> {
           ),
           PopupMenuButton<String>(
             onSelected: (v) {
-              if (v == 'unpair') svc.unpair();
+              if (v == 'settings') {
+                Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => SettingsScreen(settings: widget.settings),
+                ));
+              } else if (v == 'unpair') {
+                svc.unpair();
+              }
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'settings', child: Text('Configuracion')),
               PopupMenuItem(value: 'unpair', child: Text('Desemparejar')),
             ],
           ),

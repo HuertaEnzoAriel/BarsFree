@@ -76,9 +76,10 @@ class ConnectionService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void send(String code) {
+  /// [sendKey]: si es false, la PC escribe el codigo pero no pulsa Enter/Tab.
+  void send(String code, {bool sendKey = true}) {
     if (state != LinkState.connected) return;
-    _channel?.sink.add(jsonEncode({'type': 'scan', 'code': code}));
+    _channel?.sink.add(jsonEncode({'type': 'scan', 'code': code, 'send': sendKey}));
     lastSent = code;
     notifyListeners();
   }
