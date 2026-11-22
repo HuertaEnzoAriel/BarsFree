@@ -23,20 +23,69 @@ class CodebarsApp extends StatefulWidget {
   State<CodebarsApp> createState() => _CodebarsAppState();
 }
 
-class _CodebarsAppState extends State<CodebarsApp> {
+class _CodebarsAppState extends State<CodebarsApp> with WidgetsBindingObserver {
   final service = ConnectionService();
   final settings = SettingsService();
   bool loaded = false;
 
+  /// Un unico controlador de camara para toda la app. Si cada pantalla tuviera
+  /// el suyo, al pasar de una a otra el nuevo arrancaria antes de que el viejo
+  /// terminara de cerrar la camara y fallaria con controllerAlreadyInitialized.
+  final camera = MobileScannerController(
+    autoStart: false,
+    formats: const [
+      BarcodeFormat.ean13,
+      BarcodeFormat.ean8,
+      BarcodeFormat.upcA,
+      BarcodeFormat.upcE,
+      BarcodeFormat.code128,
+      BarcodeFormat.code39,
+      BarcodeFormat.code93,
+      BarcodeFormat.itf14,
+      BarcodeFormat.itf2of5,
+      BarcodeFormat.codabar,
+      BarcodeFormat.qrCode,
+      BarcodeFormat.dataMatrix,
+    ],
+  );
+
   @override
   void initState() {
     super.initState();
-    Future.wait([service.load(), settings.load()])
-        .then((_) => setState(() => loaded = true));
+    WidgetsBinding.instance.addObserver(this);
+    Future.wait([service.load(), settings.load()]).then((_) {
+      setState(() => loaded = true);
+      // Arranca cuando ya hay un MobileScanner montado.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startCamera());
+    });
+  }
+
+  Future<void> _startCamera() async {
+    try {
+      await camera.start();
+    } catch (_) {
+      // Los errores de arranque quedan en camera.value.error y los muestra
+      // el errorBuilder de cada pantalla.
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!loaded) return;
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _startCamera();
+      case AppLifecycleState.paused:
+        camera.stop();
+      default:
+        break;
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    camera.dispose();
     service.dispose();
     settings.dispose();
     super.dispose();
@@ -53,8 +102,12 @@ class _CodebarsAppState extends State<CodebarsApp> {
           : ListenableBuilder(
               listenable: service,
               builder: (_, _) => service.state == LinkState.unpaired
-                  ? PairScreen(service: service)
-                  : ScanScreen(service: service, settings: settings),
+                  ? PairScreen(service: service, camera: camera)
+                  : ScanScreen(
+                      service: service,
+                      settings: settings,
+                      camera: camera,
+                    ),
             ),
     );
   }
@@ -62,8 +115,9 @@ class _CodebarsAppState extends State<CodebarsApp> {
 
 /// Pantalla 1: escanear el QR que muestra el programa de la PC.
 class PairScreen extends StatefulWidget {
-  const PairScreen({super.key, required this.service});
+  const PairScreen({super.key, required this.service, required this.camera});
   final ConnectionService service;
+  final MobileScannerController camera;
 
   @override
   State<PairScreen> createState() => _PairScreenState();
@@ -93,15 +147,21 @@ class _PairScreenState extends State<PairScreen> {
       body: Column(
         children: [
           Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                MobileScanner(
-                  onDetect: onDetect,
-                  errorBuilder: (_, e) => _CameraError(e),
-                ),
-                const ScannerOverlay(aspect: 1, widthFactor: 0.65),
-              ],
+            child: LayoutBuilder(
+              // El controlador es compartido: hay que fijar siempre la ventana
+              // de lectura, si no quedaria la de la pantalla de escaneo.
+              builder: (_, box) => Stack(
+                fit: StackFit.expand,
+                children: [
+                  MobileScanner(
+                    controller: widget.camera,
+                    scanWindow: ScannerOverlay.rectFor(box.biggest, 1, 0.65),
+                    onDetect: onDetect,
+                    errorBuilder: (_, e) => _CameraError(e),
+                  ),
+                  const ScannerOverlay(aspect: 1, widthFactor: 0.65),
+                ],
+              ),
             ),
           ),
           Padding(
@@ -121,31 +181,22 @@ class _PairScreenState extends State<PairScreen> {
 
 /// Pantalla 2: escaneo continuo; cada codigo se envia a la PC.
 class ScanScreen extends StatefulWidget {
-  const ScanScreen({super.key, required this.service, required this.settings});
+  const ScanScreen({
+    super.key,
+    required this.service,
+    required this.settings,
+    required this.camera,
+  });
   final ConnectionService service;
   final SettingsService settings;
+  final MobileScannerController camera;
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
 }
 
 class _ScanScreenState extends State<ScanScreen> {
-  final controller = MobileScannerController(
-    formats: const [
-      BarcodeFormat.ean13,
-      BarcodeFormat.ean8,
-      BarcodeFormat.upcA,
-      BarcodeFormat.upcE,
-      BarcodeFormat.code128,
-      BarcodeFormat.code39,
-      BarcodeFormat.code93,
-      BarcodeFormat.itf14,
-      BarcodeFormat.itf2of5,
-      BarcodeFormat.codabar,
-      BarcodeFormat.qrCode,
-      BarcodeFormat.dataMatrix,
-    ],
-  );
+  MobileScannerController get controller => widget.camera;
   String lastCode = '';
   DateTime lastAt = DateTime.fromMillisecondsSinceEpoch(0);
   bool flash = false;
@@ -204,7 +255,9 @@ class _ScanScreenState extends State<ScanScreen> {
   void dispose() {
     hitTimer?.cancel();
     player.dispose();
-    controller.dispose();
+    // La camara sigue viva para la pantalla de emparejar; solo apagamos la
+    // linterna si quedo encendida.
+    if (flash) controller.toggleTorch();
     super.dispose();
   }
 
