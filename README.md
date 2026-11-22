@@ -1,4 +1,4 @@
-# Codebars
+# BarsFree
 
 Convierte tu celular Android en un **lector de códigos de barras inalámbrico** para tu PC con Windows.
 
