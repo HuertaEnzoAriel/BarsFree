@@ -7,3 +7,7 @@ pc-server/config.json
 # Flutter (mobile/.gitignore ya cubre build/ y .dart_tool/)
 *.apk
 *.log
+
+# Ejecutable generado
+pc-server/dist/
+*.exe

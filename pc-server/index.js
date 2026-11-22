@@ -24,7 +24,9 @@ const SUFFIX = String(args.suffix || 'enter');
 const DEDUP_MS = 1000;
 
 // --- Token de emparejamiento (se guarda para no re-emparejar cada vez) ---
-const configPath = path.join(__dirname, 'config.json');
+// Empaquetado como .exe (pkg), __dirname es de solo lectura: el token se guarda junto al .exe.
+const BASE_DIR = process.pkg ? path.dirname(process.execPath) : __dirname;
+const configPath = path.join(BASE_DIR, 'config.json');
 let config = {};
 try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch {}
 if (!config.token || args['reset-token']) {
@@ -37,9 +39,15 @@ const PAIR_ID = crypto.createHash('sha256').update(TOKEN).digest('hex').slice(0,
 const DISCOVERY_PORT = PORT + 1;
 
 // --- Proceso PowerShell persistente que simula el teclado ---
+// PowerShell no puede ejecutar un archivo que vive dentro del .exe: se extrae a una carpeta temporal.
+const typerPath = path.join(os.tmpdir(), `barsfree-typer-${process.pid}.ps1`);
+fs.writeFileSync(typerPath, fs.readFileSync(path.join(__dirname, 'typer.ps1'), 'utf8'), 'utf8');
+process.on('exit', () => { try { fs.unlinkSync(typerPath); } catch {} });
+process.on('SIGINT', () => process.exit(0)); // Ctrl+C: cierre limpio
+
 const typer = spawn(
   'powershell.exe',
-  ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'typer.ps1')],
+  ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', typerPath],
   { stdio: ['pipe', 'inherit', 'inherit'], windowsHide: true },
 );
 typer.on('exit', (c) => { console.error(`typer.ps1 termino (${c})`); process.exit(1); });

@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "build": "pkg . --compress GZip --output dist/barsfree-receptor.exe"
   },
   "keywords": [],
   "author": "",
@@ -12,5 +13,18 @@
   "dependencies": {
     "qrcode-terminal": "^0.12.0",
     "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.26.0"
+  },
+  "bin": "index.js",
+  "pkg": {
+    "assets": [
+      "typer.ps1"
+    ],
+    "targets": [
+      "node22-win-x64"
+    ],
+    "outputPath": "dist"
   }
 }

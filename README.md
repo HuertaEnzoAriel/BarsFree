@@ -49,7 +49,8 @@ La app del celular escanea con la cámara y envía el código por WiFi. Un progr
 
 **En la PC**
 - Windows 10 u 11.
-- [Node.js](https://nodejs.org) 18 o superior.
+- Para usar el receptor ya compilado (`barsfree-receptor.exe`): nada más.
+- Para ejecutarlo desde el código o generar el `.exe`: [Node.js](https://nodejs.org) 18 o superior.
 
 **Para compilar la app**
 - [Flutter SDK](https://docs.flutter.dev/get-started/install) con el SDK de Android configurado (`flutter doctor` sin errores).
@@ -62,13 +63,29 @@ La app del celular escanea con la cámara y envía el código por WiFi. Un progr
 
 ### 1. Receptor en la PC
 
+**Opción A: ejecutable (sin instalar nada).** Descargá `barsfree-receptor.exe` desde la sección **Releases** del repositorio y hacé doble clic. Se abre una consola con el QR. El token de emparejamiento se guarda en un `config.json` junto al `.exe`, así que ponelo en una carpeta propia.
+
+Windows SmartScreen puede avisar de "aplicación no reconocida", porque el `.exe` no está firmado. Elegí **Más información**, luego **Ejecutar de todas formas**.
+
+**Opción B: desde el código** (requiere Node.js).
+
 ```powershell
 cd pc-server
 npm install
 node index.js
 ```
 
-Aparece el QR de emparejamiento en la consola. **Dejá la ventana abierta** mientras uses la app.
+**Opción C: generar el `.exe` vos mismo** (requiere Node.js).
+
+```powershell
+cd pc-server
+npm install
+npm run build
+```
+
+El ejecutable queda en `pc-server/dist/barsfree-receptor.exe`. Para pasarle opciones, ejecutalo desde una terminal: `barsfree-receptor.exe --suffix=tab`.
+
+En cualquiera de las opciones aparece el QR de emparejamiento en la consola. **Dejá la ventana abierta** mientras uses la app.
 
 La primera vez, Windows pregunta si permitís a Node recibir conexiones. Aceptá para **redes privadas**, o el celular no podrá conectarse.
 
